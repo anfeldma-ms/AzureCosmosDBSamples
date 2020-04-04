@@ -1,0 +1,1 @@
+# Azure Cosmos DB Resource Token Scala Sample
