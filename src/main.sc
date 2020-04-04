@@ -1,13 +1,20 @@
-import com.microsoft.azure.documentdb.ConnectionPolicy
-import com.microsoft.azure.documentdb.ConsistencyLevel
-import com.microsoft.azure.documentdb.DocumentClient
-import com.microsoft.azure.documentdb.RequestOptions
+import java.util
+
+import com.microsoft.azure.documentdb.{ConnectionMode, ConnectionPolicy, ConsistencyLevel, Document, DocumentClient, RequestOptions}
+
 import scala.collection.immutable._
 import com.microsoft.azure.cosmosdb.spark.config.{Config, CosmosDBConfig}
 import com.microsoft.azure.cosmosdb.spark.schema._
 import org.apache.spark.sql.SparkSession
 
-/** Bootstrap the resource token test by setting up permissions.
+/**
+ * This Scala script does the following:
+ * 1. Sets up user permissions and acquires a resource token.
+ * .2 Later, uses that resource token to insert into the Azure Cosmos DB
+ * */
+
+
+/** 1. Bootstrap the resource token test by setting up permissions.
  * Log in with endpoint and master key this time around.
  * */
 
@@ -21,7 +28,6 @@ var client = new DocumentClient(url,
 
 
 val usertmp = "{ 'id' : 'user2' }";
-//val user1 = client.createUser("dbs/idiscm",new com.microsoft.azure.documentdb.User(usertmp), null)
 val user1 = client.readUser("dbs/idiscm/users/user2",null);
 
 val tmpuser = user1.getResource();
@@ -39,19 +45,40 @@ val jstring = permtest.getResource();
 val user1permission = client.readPermission(permissionlink, requestOptions);
 val resourcetoken = jstring.getToken();
 
-/** End of bootstrap */
+client.close();
+
+/** End of setup */
 
 
-/** Resource token test */
+/** 2. Insert operation using resource token */
 
-val readConfig2 = Config(Map("Endpoint" -> url,
-  "ResourceToken" -> resourcetoken,
-  "Database" -> "idiscm",
-  "Collection" -> "custdata2",
-  "query_custom" -> "SELECT * FROM c"
-));
+/** Insert a document into Azure Cosmos DB (i.e. without Spark) */
 
-val jstringvalues = permtest.getResponseHeaders();
+var connectionPolicy = ConnectionPolicy.GetDefault();
+
+connectionPolicy.setConnectionMode(ConnectionMode.DirectHttps)
+
+var testClient = new DocumentClient(url,
+  resourcetoken,
+  connectionPolicy,
+  ConsistencyLevel.Eventual);
+
+// Link to collection custdata2 within database
+var collectionLink="dbs/idiscm/colls/custdata2";
+
+// Document representing a store item
+val doc = new Document();
+doc.set("type", "storeItem")
+doc.set("name","toothpaste")
+doc.set("aisle","A")
+doc.set("quantity",3);
+doc.set("price",13.33)
+
+testClient.createDocument(collectionLink, doc, null, false)
+
+testClient.close()
+
+/** Insert a dataframe into Azure Cosmos DB using Spark */
 
 // Set up Spark session
 var spark = SparkSession
@@ -60,9 +87,7 @@ var spark = SparkSession
   .master(master = "local")
   .getOrCreate();
 
-// TEST 1 - Read
-val coll = spark.sqlContext.read.cosmosDB(readConfig2)
-
+// Config settings for write
 val writeConfig = Config(Map(
   "Endpoint" -> url,
   //"Masterkey" -> key,
@@ -72,14 +97,16 @@ val writeConfig = Config(Map(
   //,"Upsert" : True
 ))
 
+// Needed for dataframe formatting
 val spk = spark
 import spk.implicits._
 
 var r = new scala.util.Random
 var data: Map[String, String] = Map()
-data += (("pk" -> "partition key"))
 data += (("age") -> r.nextInt(100).toString)
 val df = Seq(data)
 
-// TEST 2 -
+// Write test
 df.toDF().write.mode(saveMode = "Overwrite").cosmosDB(writeConfig)
+
+/** End of write test */
