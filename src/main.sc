@@ -1,6 +1,6 @@
 import java.util
 
-import com.microsoft.azure.documentdb.{ConnectionMode, ConnectionPolicy, ConsistencyLevel, Document, DocumentClient, RequestOptions}
+import com.microsoft.azure.documentdb.{ConnectionMode, ConnectionPolicy, ConsistencyLevel, Document, DocumentClient, PartitionKey, Permission, RequestOptions}
 
 import scala.collection.immutable._
 import com.microsoft.azure.cosmosdb.spark.config.{Config, CosmosDBConfig}
@@ -27,17 +27,14 @@ var url = "your.endpoint";
 // This master key is used only to set up permissions, later we will use resource token
 var key = "yourmasterkey";
 
+
 var client = new DocumentClient(url,
   key,
   ConnectionPolicy.GetDefault(),
     ConsistencyLevel.Eventual);
 
-
-val usertmp = "{ 'id' : 'user2' }";
-val user1 = client.readUser("dbs/idiscm/users/user2",null);
-
-val tmpuser = user1.getResource();
-val ruser = client.readUser("dbs/idiscm/users/user2",null);
+//client.createUser("dbs/idiscm",new com.microsoft.azure.documentdb.User("{ 'id' : 'user2' }"), null)
+//client.readUser("dbs/idiscm/users/user2",null);
 val permission_user = "{  'id': 'a_permission1', 'permissionMode': 'All', 'resource': 'dbs/idiscm/colls/custdata2' }";
 val permission = new com.microsoft.azure.documentdb.Permission(permission_user);
 val permissionlink = "dbs/idiscm/users/user2/permissions/a_permission1";
@@ -48,8 +45,9 @@ val requestOptions =  new RequestOptions();
 val permtest = client.createPermission("dbs/idiscm/users/user2/",permission,requestOptions);
 
 val jstring = permtest.getResource();
-val user1permission = client.readPermission(permissionlink, requestOptions);
 val resourcetoken = jstring.getToken();
+
+
 
 client.close();
 
@@ -64,13 +62,28 @@ var connectionPolicy = ConnectionPolicy.GetDefault();
 
 connectionPolicy.setConnectionMode(ConnectionMode.DirectHttps)
 
+import util.ArrayList
+
+var permlist = new ArrayList[Permission]()
+permlist.add(permtest.getResource())
+
+var testClient = new DocumentClient(url,permlist,connectionPolicy,ConsistencyLevel.Eventual)
+
+/*
 var testClient = new DocumentClient(url,
-  resourcetoken,
+  authKey,
   connectionPolicy,
   ConsistencyLevel.Eventual);
+*/
 
 // Link to collection custdata2 within database
 var collectionLink="dbs/idiscm/colls/custdata2";
+
+// Read test
+var options = new RequestOptions();
+options.setPartitionKey(new PartitionKey("read_test_doc"));
+var response = testClient.readDocument(collectionLink + "/docs/read_test_doc",options);
+print("Status code: " + response.getStatusCode() + "\n\n") // 200 indicates success
 
 // Document representing a store item
 val doc = new Document();
@@ -92,6 +105,16 @@ var spark = SparkSession
   .appName(name = "Spark resource token")
   .master(master = "local")
   .getOrCreate();
+
+// Read test
+//val readConfig2 = Config(Map("Endpoint" -> url,
+//  "ResourceToken" -> resourcetoken,
+//  "Database" -> "idiscm",
+//  "Collection" -> "custdata2",
+//  "query_custom" -> "SELECT * FROM c"
+//));
+//val coll = spark.sqlContext.read.cosmosDB(readConfig2)
+
 
 // Config settings for write
 val writeConfig = Config(Map(
