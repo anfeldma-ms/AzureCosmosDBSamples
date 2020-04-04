@@ -18,8 +18,11 @@ import org.apache.spark.sql.SparkSession
  * Log in with endpoint and master key this time around.
  * */
 
-var url = "https://testdb002.documents.azure.com:443/";
-var key = "o2iij6euC58ati2Vjui8CjkZW9AU87y7o84GDe5kez7fo86SfKrpu5lKyOhbhwHQSXYae9e24yCVEMovWHxZzw==";
+// Cosmos DB Endpoint
+var url = "your.endpoint";
+
+// This master key is used only to set up permissions, later we will use resource token
+var key = "yourmasterkey";
 
 var client = new DocumentClient(url,
   key,
