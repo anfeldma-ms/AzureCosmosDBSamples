@@ -10,7 +10,10 @@ import org.apache.spark.sql.SparkSession
 /**
  * This Scala script does the following:
  * 1. Sets up user permissions and acquires a resource token.
- * .2 Later, uses that resource token to insert into the Azure Cosmos DB
+ * 2. Later, uses that resource token to insert a document and then a dataframe into Azure Cosmos DB
+ *
+ * Before running this script, please set 'url' and 'key' below
+ *
  * */
 
 
